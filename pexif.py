@@ -87,21 +87,26 @@ img.xmp
 E.g:
 
 try:
- print img.exif.tiff.exif.FocalLength
+ six.print_(img.exif.tiff.exif.FocalLength)
 except AttributeError:
- print "No Focal Length data"
+ six.print_("No Focal Length data")
 
 """
 
-import StringIO
+import six
 import sys
 from struct import unpack, pack
+
+try:
+    integer_64 = long
+except NameError: # Python3
+    integer_64 = int
 
 MAX_HEADER_SIZE = 64 * 1024
 DELIM = 0xff
 EOI = 0xd9
-SOI_MARKER = chr(DELIM) + '\xd8'
-EOI_MARKER = chr(DELIM) + '\xd9'
+SOI_MARKER = six.int2byte(DELIM) + six.b('\xd8')
+EOI_MARKER = six.int2byte(DELIM) + six.b('\xd9')
 
 TIFF_OFFSET = 6
 TIFF_TAG = 0x2a
@@ -122,8 +127,8 @@ def debug(*debug_string):
     DEBUG to 1."""
     if DEBUG:
         for each in debug_string:
-            print each,
-        print
+            six.print_(each),
+        six.print_()
 
 
 class DefaultSegment:
@@ -160,7 +165,7 @@ class DefaultSegment:
         must write out any data in the segment. This shouldn't in general be
         overloaded by subclasses, they should instead override the get_data()
         method."""
-        fd.write('\xff')
+        fd.write(six.b('\xff'))
         fd.write(pack('B', self.marker))
         data = self.get_data()
         fd.write(pack('>H', len(data) + 2))
@@ -180,8 +185,8 @@ class DefaultSegment:
         """This is called by JpegFile.dump() to output a human readable
         representation of the segment. Subclasses should overload this to provide
         extra information."""
-        print >> fd, " Section: [%5s] Size: %6d" % \
-            (jpeg_markers[self.marker][0], len(self.data))
+        six.print_(" Section: [%5s] Size: %6d" \
+            % (jpeg_markers[self.marker][0], len(self.data)), file=fd)
 
 
 class StartOfScanSegment(DefaultSegment):
@@ -218,8 +223,8 @@ class StartOfScanSegment(DefaultSegment):
 
     def dump(self, fd):
         """Dump as ascii readable data to a given file object"""
-        print >> fd, " Section: [  SOS] Size: %6d Image data size: %6d" % \
-            (len(self.data), len(self.img_data))
+        six.print_(" Section: [  SOS] Size: %6d Image data size: %6d" % \
+            (len(self.data), len(self.img_data)), file=fd)
 
 
 class ExifType:
@@ -435,9 +440,9 @@ class IfdData(object):
                         # raise JpegFile.InvalidFile("ASCII tag '%s' not
                         # NULL-terminated: %s [%s]" % (self.tags.get(tag,
                         # (hex(tag), 0))[0], the_data, map(ord, the_data)))
-                        # print "ASCII tag '%s' not NULL-terminated:
+                        # six.print_("ASCII tag '%s' not NULL-terminated:
                         # %s [%s]" % (self.tags.get(tag, (hex(tag), 0))[0],
-                        # the_data, map(ord, the_data))
+                        # the_data, map(ord, the_data)))
                     actual_data = the_data
                 elif exif_type == SHORT:
                     actual_data = list(unpack(e + ("H" * components), the_data))
@@ -453,7 +458,7 @@ class IfdData(object):
                                                             the_data[i*8:
                                                                      i*8+8])))
                 else:
-                    raise "Can't handle this"
+                    six.raise_from("Can't handle this")
 
                 if (byte_size > 4):
                     debug("%s" % actual_data)
@@ -521,7 +526,7 @@ class IfdData(object):
                 for i in range(components):
                     actual_data += pack(e + t, *the_data[i].as_tuple())
             else:
-                raise "Can't handle this", exif_type
+                raise six.raise_from("Can't handle this", exif_type)
             if (byte_size) > 4:
                 output_data += actual_data
                 actual_data = pack(e + "I", data_offset)
@@ -549,7 +554,7 @@ class IfdData(object):
 
     def dump(self, f, indent=""):
         """Dump the IFD file"""
-        print >> f, indent + "<--- %s start --->" % self.name
+        six.print_(indent + "<--- %s start --->" % self.name, file=f)
         for entry in self.entries:
             tag, exif_type, data = entry
             if exif_type == ASCII:
@@ -559,9 +564,9 @@ class IfdData(object):
             else:
                 if data and len(data) == 1:
                     data = data[0]
-                print >> f, indent + "  %-40s %s" % \
-                    (self.tags.get(tag, (hex(tag), 0))[0], data)
-        print >> f, indent + "<--- %s end --->" % self.name
+                six.print_(indent + "  %-40s %s" % \
+                    (self.tags.get(tag, (hex(tag), 0))[0], data), file=f)
+        six.print_(indent + "<--- %s end --->" % self.name, file=f)
 
 
 class IfdInterop(IfdData):
@@ -861,7 +866,10 @@ class ExifSegment(DefaultSegment):
         """Overloads the DefaultSegment method to parse the data of
         this segment. Can raise InvalidFile if we don't get what we expect."""
         exif = unpack("6s", data[:6])[0]
-        exif = exif.strip('\0')
+        try:
+            exif = exif.strip('\0')
+        except TypeError:
+            pass
 
         if (exif != "Exif"):
             raise self.InvalidSegment("Bad Exif Marker. Got <%s>, "
@@ -910,7 +918,7 @@ class ExifSegment(DefaultSegment):
             offset = unpack(self.e + "I", tiff_data[start:start+4])[0]
 
     def dump(self, fd):
-        print >> fd, " Section: [ EXIF] Size: %6d" % (len(self.data))
+        six.print_(" Section: [ EXIF] Size: %6d" % (len(self.data)), file=fd)
         for ifd in self.ifds:
             ifd.dump(fd)
 
@@ -1004,7 +1012,11 @@ class JpegFile:
 
     def fromString(str, mode="rw"):
         """Return a new JpegFile object taking data from a string."""
-        return JpegFile(StringIO.StringIO(str), "from buffer", mode=mode)
+        try:
+            str = six.b(str)
+        except AttributeError:
+            pass
+        return JpegFile(six.BytesIO(str), "from buffer", mode=mode)
     fromString = staticmethod(fromString)
 
     def fromFd(fd, mode="rw"):
@@ -1074,7 +1086,7 @@ class JpegFile:
 
     def writeString(self):
         """Write the JpegFile out to a string. Returns a string."""
-        f = StringIO.StringIO()
+        f = six.BytesIO()
         self.writeFd(f)
         return f.getvalue()
 
@@ -1093,7 +1105,7 @@ class JpegFile:
     def dump(self, f=sys.stdout):
         """Write out ASCII representation of the file on a given file
         object. Output default to stdout."""
-        print >> f, "<Dump of JPEG %s>" % self.filename
+        six.print_("<Dump of JPEG %s>" % self.filename, file=f)
         for segment in self._segments:
             segment.dump(f)
 
@@ -1175,8 +1187,8 @@ class JpegFile:
                 (1/60.0 * float(min.num) / min.den) + \
                 (1/3600.0 * float(sec.num) / sec.den)
         if not hasattr(self.exif.primary, 'GPSIFD'):
-            raise self.NoSection, "File %s doesn't have a GPS section." % \
-                self.filename
+            raise self.NoSection("File %s doesn't have a GPS section." % \
+                self.filename)
 
         gps = self.exif.primary.GPS
         lat = convert(gps.GPSLatitude)
@@ -1200,7 +1212,7 @@ class JpegFile:
         other = (val - deg) * 60
         minutes = int(other)
         secs = (other - minutes) * 60
-        secs = long(secs * JpegFile.SEC_DEN)
+        secs = integer_64(secs * JpegFile.SEC_DEN)
         return (sign, deg, minutes, secs)
 
     _parse = staticmethod(_parse)
