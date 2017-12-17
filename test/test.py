@@ -1,7 +1,7 @@
 import unittest
 import pexif
-import StringIO
 import difflib
+import six
 
 test_data = [
     ("test/data/rose.jpg", "test/data/rose.txt"),
@@ -54,14 +54,14 @@ class TestLoadFunctions(unittest.TestCase):
         for test_file, expected_file in test_data:
             expected = open(expected_file, 'rb').read()
             jpeg = pexif.JpegFile.fromFile(test_file)
-            out = StringIO.StringIO()
+            out = six.BytesIO()
             jpeg.dump(out)
             res = "Error in file <%s>\n" % test_file
-            x = difflib.unified_diff(expected.split('\n'), out.getvalue().split('\n'))
+            x = difflib.unified_diff(str(expected).split('\n'), str(out.getvalue()).split('\n'))
             for each in x:
                 res += each
                 res += '\n'
-            self.assertEqual(expected, out.getvalue(), res)
+            self.assertEqual(str(expected), str(out.getvalue()), res)
 
 class TestExifFunctions(unittest.TestCase):
 
@@ -75,8 +75,8 @@ class TestExifFunctions(unittest.TestCase):
     def test_badtifftag(self):
         data = list(open(DEFAULT_TESTFILE, "rb").read())
         # Now trash the exif signature
-        assert(data[0x20] == '\x2a')
-        data[0x20] = '0'
+        assert(data[six.b(0x20)] == '\x2a')
+        data[six.b(0x20)] = '0'
         self.assertRaises(pexif.JpegFile.InvalidFile, pexif.JpegFile.fromString, "".join(data))
 
     def test_goodexif(self):
